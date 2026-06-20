@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from database import find_one, insert_one, update_one
 
 load_dotenv()
