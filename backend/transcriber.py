@@ -155,5 +155,12 @@ def process_url(url: str) -> dict:
             transcript = get_youtube_transcript(video_id)
             if transcript:
                 return {"platform": platform, "url": url, **transcript}
-            raise HTTPException(404, "No captions found for this video. The video may not have closed captions available.")
-    raise HTTPException(400, "Only YouTube videos are supported. Paste a YouTube URL.")
+            raise HTTPException(404, "No captions found for this video.")
+    audio_path = download_audio(url)
+    try:
+        result = transcribe_audio(audio_path)
+        result["platform"] = platform
+        result["url"] = url
+        return result
+    finally:
+        _cleanup_dir(os.path.dirname(audio_path))
