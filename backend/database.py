@@ -13,7 +13,12 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "data.json")
 if MONGODB_URL:
     from pymongo import MongoClient
 
-    _client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000, tlsInsecure=True)
+    # Append TLS 1.2 params for Python 3.14+ compatibility with Atlas
+    tls_url = MONGODB_URL
+    if "tls=" not in tls_url:
+        sep = "&" if "?" in tls_url else "?"
+        tls_url += f"{sep}tls=true&tlsAllowInvalidCertificates=true"
+    _client = MongoClient(tls_url, serverSelectionTimeoutMS=5000)
     _db = _client["transcribo"]
 
     async def find_one(collection: str, query: dict) -> dict | None:
