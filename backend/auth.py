@@ -1,17 +1,35 @@
-import os, hashlib, base64
-from datetime import datetime, timedelta, timezone
+import os, hashlib, base64, hmac, json, time
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
 from pydantic import BaseModel
 from database import find_one, insert_one, update_one
 
 load_dotenv()
 
 SECRET_KEY = os.getenv("JWT_SECRET", "dev-secret-change-in-production")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE = timedelta(days=7)
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+def _create_jwt(payload: dict) -> str:
+    header = _b64url(json.dumps({"alg":"HS256","typ":"JWT"}).encode())
+    body = _b64url(json.dumps(payload, default=str).encode())
+    sig = _b64url(hmac.new(SECRET_KEY.encode(), f"{header}.{body}".encode(), hashlib.sha256).digest())
+    return f"{header}.{body}.{sig}"
+
+def _decode_jwt(token: str) -> dict:
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise ValueError("Invalid JWT")
+    header_body = f"{parts[0]}.{parts[1]}".encode()
+    expected = _b64url(hmac.new(SECRET_KEY.encode(), header_body, hashlib.sha256).digest())
+    if not hmac.compare_digest(expected, parts[2]):
+        raise ValueError("Invalid signature")
+    body = json.loads(base64.urlsafe_b64decode(parts[1] + "=="))
+    if body.get("exp", 0) < time.time():
+        raise ValueError("Token expired")
+    return body
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 security = HTTPBearer()
@@ -46,18 +64,19 @@ class TokenResponse(BaseModel):
 def create_token(email: str) -> str:
     payload = {
         "sub": email,
-        "exp": datetime.now(timezone.utc) + ACCESS_TOKEN_EXPIRE,
+        "exp": time.time() + 86400 * 7,
+        "iat": time.time(),
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return _create_jwt(payload)
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     token = credentials.credentials
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = _decode_jwt(token)
         email = payload.get("sub")
         if not email:
             raise HTTPException(401, "Invalid token")
-    except JWTError:
+    except ValueError:
         raise HTTPException(401, "Invalid or expired token")
     user = await find_one("users", {"email": email})
     if not user:
