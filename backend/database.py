@@ -11,14 +11,9 @@ MONGODB_URL = os.getenv("MONGODB_URL", "")
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.json")
 
 if MONGODB_URL:
-    import ssl
     from pymongo import MongoClient
 
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-
-    _client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000, ssl=True, ssl_context=ctx)
+    _client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000)
     _db = _client["transcribo"]
 
     async def find_one(collection: str, query: dict) -> dict | None:
