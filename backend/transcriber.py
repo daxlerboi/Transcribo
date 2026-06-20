@@ -5,11 +5,12 @@ import urllib.request, urllib.error
 import tempfile
 import subprocess
 import urllib.parse
+import base64
+import requests
 from ipaddress import ip_address, ip_network
 from fastapi import HTTPException
 from youtube_transcript_api import YouTubeTranscriptApi
 
-# Whisper is optional — disabled on low-memory environments (Render free tier, etc.)
 WHISPER_ENABLED = os.getenv("WHISPER_ENABLED", "1") == "1"
 _whisper_model = None
 
@@ -73,6 +74,79 @@ def detect_platform(url: str) -> str:
 
 PREFERRED_LANGS = ["en", "hi", "es", "ar", "pt", "fr", "de", "ja", "ru", "ko", "zh-Hans", "zh-Hant"]
 
+def _make_youtube_session() -> requests.Session | None:
+    """Build a requests.Session with YouTube cookies from the env var."""
+    if not COOKIES_B64:
+        return None
+    try:
+        raw = json.loads(base64.b64decode(COOKIES_B64).decode())
+        session = requests.Session()
+        for c in raw:
+            if isinstance(c, dict) and "domain" in c and "name" in c and "value" in c:
+                session.cookies.set(
+                    c["name"], c["value"],
+                    domain=c["domain"].lstrip("."),
+                    path=c.get("path", "/"),
+                )
+        return session
+    except Exception:
+        return None
+
+def _fetch_transcript_with_cookies(video_id: str) -> dict | None:
+    """Scrape ytInitialPlayerResponse from YouTube page using an authenticated session."""
+    session = _make_youtube_session()
+    if not session:
+        return None
+    try:
+        resp = session.get(
+            f"https://www.youtube.com/watch?v={video_id}",
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            },
+            timeout=20,
+        )
+        if resp.status_code != 200:
+            return None
+        m = re.search(r'ytInitialPlayerResponse\s*=\s*({.*?});', resp.text, re.DOTALL)
+        if not m:
+            return None
+        player = json.loads(m.group(1))
+        tracks = (
+            player.get("captions", {})
+            .get("playerCaptionsTracklistRenderer", {})
+            .get("captionTracks", [])
+        )
+        if not tracks:
+            return None
+        track = next((t for t in tracks if t.get("languageCode", "").startswith("en")), tracks[0])
+        base_url = track["baseUrl"]
+        if "fmt=" not in base_url:
+            base_url += "&fmt=json"
+        tr_resp = session.get(base_url, timeout=15)
+        tr_data = tr_resp.json()
+        segments = []
+        for event in tr_data.get("events", []):
+            start = event.get("tStartMs", 0) / 1000.0
+            segs = event.get("segs", [])
+            text = " ".join(s.get("utf8", "") for s in segs if isinstance(s, dict))
+            if text.strip():
+                duration = event.get("dDurationMs", 2000) / 1000.0
+                segments.append({
+                    "start": round(start, 2),
+                    "end": round(start + duration, 2),
+                    "text": text.strip(),
+                })
+        if not segments:
+            return None
+        full_text = " ".join(s["text"] for s in segments)
+        return {"text": full_text, "segments": segments, "language": track.get("languageCode", "en")}
+    except Exception:
+        return None
+
 def _fetch_transcript_fallback(video_id: str) -> dict | None:
     try:
         url = f"https://youtubetranscript.com/api?vid={video_id}"
@@ -92,57 +166,10 @@ def _fetch_transcript_fallback(video_id: str) -> dict | None:
     except Exception:
         return None
 
-def _extract_subs_ytdlp(video_id: str) -> dict | None:
-    if not COOKIES_B64:
-        return None
-    import base64
-    cookies_path = os.path.join(tempfile.gettempdir(), f"yt_cookies_{video_id}.txt")
-    out_dir = tempfile.mkdtemp(prefix="subs_")
-    try:
-        with open(cookies_path, "wb") as f:
-            f.write(base64.b64decode(COOKIES_B64))
-        out_template = os.path.join(out_dir, "%(id)s")
-        result = subprocess.run(
-            [
-                "yt-dlp", f"https://www.youtube.com/watch?v={video_id}",
-                "--write-auto-subs", "--sub-lang", "en",
-                "--skip-download", "--no-warnings",
-                "--sub-format", "vtt",
-                "--cookies", cookies_path,
-                "-o", out_template,
-            ],
-            capture_output=True, text=True, timeout=60,
-        )
-        if result.returncode != 0:
-            return None
-        segments = []
-        for f in os.listdir(out_dir):
-            if f.endswith(".vtt"):
-                with open(os.path.join(out_dir, f), encoding="utf-8") as sf:
-                    content = sf.read()
-                for block in content.strip().split("\n\n"):
-                    lines = block.strip().split("\n")
-                    if len(lines) >= 2 and "-->" in lines[0]:
-                        start_str = lines[0].split(" --> ")[0].replace(",", ".")
-                        parts = start_str.split(":")
-                        start = int(parts[0])*3600 + int(parts[1])*60 + float(parts[2])
-                        t = " ".join(lines[1:]).replace("<c>", "").replace("</c>", "").replace("&amp;", "&").strip()
-                        if t:
-                            segments.append({"start": round(start, 2), "end": round(start + 2, 2), "text": t})
-        if segments:
-            text = " ".join(s["text"] for s in segments)
-            return {"text": text, "segments": segments, "language": "en"}
-        return None
-    except Exception:
-        return None
-    finally:
-        try: os.remove(cookies_path)
-        except: pass
-        try: _cleanup_dir(out_dir)
-        except: pass
-
 def get_youtube_transcript(video_id: str) -> dict | None:
-    last_error = None
+    result = _fetch_transcript_with_cookies(video_id)
+    if result is not None:
+        return result
     for lang in (None, *PREFERRED_LANGS):
         try:
             kwargs = {"languages": [lang]} if lang else {}
@@ -155,21 +182,19 @@ def get_youtube_transcript(video_id: str) -> dict | None:
             ]
             text = " ".join(s["text"] for s in segments)
             return {"text": text, "segments": segments, "language": lang or "en"}
-        except Exception as e:
-            last_error = e
+        except Exception:
             continue
     fallback = _fetch_transcript_fallback(video_id)
     if fallback:
         return fallback
-    cookie_subs = _extract_subs_ytdlp(video_id)
-    if cookie_subs:
-        return cookie_subs
     if COOKIES_B64:
-        raise HTTPException(404, "No captions found for this video. Music videos often lack captions — try a different video (news, tutorials, talks).")
-    msg = str(last_error)
-    if "blocked" in msg.lower() or "ip" in msg.lower():
-        raise HTTPException(502, "YouTube blocked this server's IP. To bypass, export cookies from your browser and set YOUTUBE_COOKIES env var (base64-encoded cookies.txt). Or run locally with 'start.bat'.")
-    raise HTTPException(502, msg.split("\n")[0]) from None
+        raise HTTPException(404, "No captions found for this video — music videos and shorts often lack captions. Try a video with dialogue (talks, tutorials, news).")
+    raise HTTPException(502, (
+        "YouTube blocked this server's IP. To fix this, "
+        "export your YouTube cookies as JSON from your browser, "
+        "base64-encode them, and set as YOUTUBE_COOKIES env var. "
+        "Or run locally with 'start.bat'."
+    ))
 
 def download_audio(url: str) -> str:
     out_dir = tempfile.mkdtemp(prefix="transcribe_")
