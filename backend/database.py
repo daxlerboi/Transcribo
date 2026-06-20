@@ -19,6 +19,17 @@ def _write(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, default=str)
 
+async def find_many(collection: str, query: dict, sort_by: str | None = None, reverse: bool = True) -> list[dict]:
+    data = await asyncio.to_thread(_read)
+    items = data.get(collection, [])
+    result = [
+        item for item in items
+        if all(item.get(k) == v for k, v in query.items())
+    ]
+    if sort_by:
+        result.sort(key=lambda x: x.get(sort_by, ""), reverse=reverse)
+    return result
+
 async def find_one(collection: str, query: dict) -> dict | None:
     data = await asyncio.to_thread(_read)
     for item in data.get(collection, []):
