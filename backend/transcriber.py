@@ -28,6 +28,8 @@ def get_whisper_model():
 AUDIO_EXTS = {".m4a", ".mp3", ".wav", ".webm", ".ogg"}
 YT_API = YouTubeTranscriptApi()
 
+COOKIES_B64 = os.getenv("YOUTUBE_COOKIES", "")
+
 PRIVATE_NETS = [
     ip_network("127.0.0.0/8"),
     ip_network("10.0.0.0/8"),
@@ -90,6 +92,53 @@ def _fetch_transcript_fallback(video_id: str) -> dict | None:
     except Exception:
         return None
 
+def _extract_subs_ytdlp(video_id: str) -> dict | None:
+    if not COOKIES_B64:
+        return None
+    import base64
+    cookies_path = os.path.join(tempfile.gettempdir(), f"yt_cookies_{video_id}.txt")
+    out_dir = tempfile.mkdtemp(prefix="subs_")
+    try:
+        with open(cookies_path, "wb") as f:
+            f.write(base64.b64decode(COOKIES_B64))
+        out_template = os.path.join(out_dir, "%(id)s")
+        subprocess.run(
+            [
+                "yt-dlp", f"https://www.youtube.com/watch?v={video_id}",
+                "--write-auto-subs", "--sub-lang", "en",
+                "--skip-download", "--no-warnings",
+                "--sub-format", "vtt",
+                "--cookies", cookies_path,
+                "-o", out_template,
+            ],
+            capture_output=True, text=True, timeout=60,
+        )
+        segments = []
+        for f in os.listdir(out_dir):
+            if f.endswith(".vtt"):
+                with open(os.path.join(out_dir, f), encoding="utf-8") as sf:
+                    content = sf.read()
+                for block in content.strip().split("\n\n"):
+                    lines = block.strip().split("\n")
+                    if len(lines) >= 2 and "-->" in lines[0]:
+                        start_str = lines[0].split(" --> ")[0].replace(",", ".")
+                        parts = start_str.split(":")
+                        start = int(parts[0])*3600 + int(parts[1])*60 + float(parts[2])
+                        t = " ".join(lines[1:]).replace("<c>", "").replace("</c>", "").replace("&amp;", "&").strip()
+                        if t:
+                            segments.append({"start": round(start, 2), "end": round(start + 2, 2), "text": t})
+        if segments:
+            text = " ".join(s["text"] for s in segments)
+            return {"text": text, "segments": segments, "language": "en"}
+        return None
+    except Exception:
+        return None
+    finally:
+        try: os.remove(cookies_path)
+        except: pass
+        try: _cleanup_dir(out_dir)
+        except: pass
+
 def get_youtube_transcript(video_id: str) -> dict | None:
     last_error = None
     for lang in (None, *PREFERRED_LANGS):
@@ -110,9 +159,14 @@ def get_youtube_transcript(video_id: str) -> dict | None:
     fallback = _fetch_transcript_fallback(video_id)
     if fallback:
         return fallback
+    cookie_subs = _extract_subs_ytdlp(video_id)
+    if cookie_subs:
+        return cookie_subs
     msg = str(last_error)
     if "blocked" in msg.lower() or "ip" in msg.lower():
-        raise HTTPException(502, "YouTube blocked this server's IP. Run the app locally with 'start.bat' to use your own IP.")
+        if not COOKIES_B64:
+            raise HTTPException(502, "YouTube blocked this server's IP. To bypass, export cookies from your browser and set YOUTUBE_COOKIES env var (base64-encoded cookies.txt). Or run locally with 'start.bat'.")
+        raise HTTPException(502, "Cookies provided but still blocked by YouTube. Your cookies may be expired — re-export them from your browser.")
     raise HTTPException(502, msg.split("\n")[0]) from None
 
 def download_audio(url: str) -> str:
