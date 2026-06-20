@@ -1,56 +1,58 @@
 # Transcribo
 
-<p align="center">
-  <img src="https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB" alt="React"/>
-  <img src="https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white" alt="Vite"/>
-  <img src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white" alt="Python"/>
-  <img src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white" alt="FastAPI"/>
-  <img src="https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white" alt="MongoDB"/>
-  <img src="https://img.shields.io/badge/JWT-000000?logo=jsonwebtokens&logoColor=white" alt="JWT"/>
-  <img src="https://img.shields.io/badge/Whisper-412991?logo=openai&logoColor=white" alt="Whisper"/>
-  <img src="https://img.shields.io/badge/yt--dlp-FF0000?logo=youtube&logoColor=white" alt="yt-dlp"/>
-  <img src="https://img.shields.io/badge/bcrypt-003545?logo=lock&logoColor=white" alt="bcrypt"/>
-  <img src="https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white" alt="HTML5"/>
-  <img src="https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white" alt="CSS3"/>
-  <img src="https://img.shields.io/badge/Uvicorn-0A9EDC?logo=gunicorn&logoColor=white" alt="Uvicorn"/>
-  <img src="https://img.shields.io/badge/Passlib-6C47FF?logo=python&logoColor=white" alt="Passlib"/>
-</p>
+[![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
+[![Python](https://img.shields.io/badge/Python-3.13+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-ready-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Whisper](https://img.shields.io/badge/Whisper-OpenAI-412991)](https://github.com/openai/whisper)
+[![yt-dlp](https://img.shields.io/badge/yt--dlp-powered-FF0000?logo=youtube&logoColor=white)](https://github.com/yt-dlp/yt-dlp)
+[![JWT](https://img.shields.io/badge/JWT-auth-000000?logo=jsonwebtokens&logoColor=white)](https://jwt.io/)
+[![Windows](https://img.shields.io/badge/Windows-supported-0078D4?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
 
-A full-stack video transcription web app. Paste a YouTube or Instagram link — get the full transcript with timestamped segments instantly. Features user authentication (register/login/logout) with JWT, multi-language caption support, and a Whisper AI fallback for videos without captions.
+Built by `daxler_boi`
+
+Transcribo is a full-stack video transcription web app. Paste a YouTube or Instagram link — get the full transcript with timestamped segments instantly.
 
 ---
 
-## Table of Contents
+## What It Does
 
-- [Tech Stack](#tech-stack)
-- [Architecture Overview](#architecture-overview)
-- [Features](#features)
-- [File-by-File Breakdown](#file-by-file-breakdown)
-  - [Backend](#backend)
-  - [Frontend](#frontend)
-  - [Database](#database)
-  - [Root](#root)
-- [Setup & Running](#setup--running)
-- [Authentication Flow](#authentication-flow)
-- [Transcription Pipeline](#transcription-pipeline)
-- [Database Layer](#database-layer)
-  - [Local Development (JSON File)](#local-development-json-file)
-  - [Switching to MongoDB](#switching-to-mongodb)
-- [API Reference](#api-reference)
-- [Security Implementation](#security-implementation)
-- [Deployment](#deployment)
-- [Project Structure (Full Tree)](#project-structure-full-tree)
+- **YouTube transcripts** — Fetches existing captions instantly via YouTube's API. No download. No GPU.
+- **Instagram + other platforms** — Falls back to yt-dlp + OpenAI Whisper for any video URL.
+- **Multi-language** — Auto-detects available caption languages across 12 languages, picks the best match.
+- **Timestamped segments** — Returns the full transcript plus individual segments with start/end times.
+- **Copy to clipboard** — One-click copy of the full transcript text.
+- **User authentication** — Register, login, logout with JWT-based sessions. Server-side token blacklist on logout.
+- **Security-first** — CORS locked to specific origins, SSRF guard, URL validation, bcrypt hashing, temp file cleanup.
+
+---
+
+## How It Is Built
+
+The project follows a two-tier architecture:
+
+1. **React frontend** (Vite dev server) communicates with a **FastAPI backend** via REST. Vite proxies `/api/*` requests to avoid CORS issues in development.
+2. The backend runs two independent systems:
+   - **Auth system** — JWT-based register/login/logout with bcrypt password hashing and server-side token blacklist.
+   - **Transcription pipeline** — Two tiers: YouTube Transcript API (instant) and yt-dlp + Whisper (download + transcribe fallback).
+
+The frontend handles three states: loading (token validation), auth page (login/register), and transcribe page (the main interface). The backend handles URL validation, platform detection, language selection, and transcription orchestration.
+
+The database layer uses a JSON file in development (no server needed) and swaps to MongoDB in production via a single `.env` variable — no code changes required.
 
 ---
 
 ## Tech Stack
 
 ### Frontend
+
 - **React 19** — UI framework
 - **Vite 8** — Build tool and dev server
 - **CSS** — Plain CSS (no framework, no dependencies)
 
 ### Backend
+
 - **Python 3.13+** — Runtime
 - **FastAPI** — REST API framework (async)
 - **Jose (python-jose)** — JWT token creation and verification
@@ -61,6 +63,7 @@ A full-stack video transcription web app. Paste a YouTube or Instagram link — 
 - **Uvicorn** — ASGI server
 
 ### Database
+
 - **JSON file** (development) — No database server needed
 - **MongoDB** (production) — Swappable via a single `.env` variable
 
@@ -93,35 +96,7 @@ The frontend and backend communicate via REST. The Vite dev server proxies `/api
 
 ---
 
-## Features
-
-### Transcription
-- **YouTube** — Fetches existing captions instantly via YouTube's API. No download. No GPU. Works for any video that has captions available (auto-generated or manual).
-- **Instagram + other platforms** — Falls back to yt-dlp (download audio) + OpenAI Whisper (transcribe). Works for any video URL.
-- **Multi-language** — Auto-detects available caption languages. Tries English → Hindi → Spanish → Arabic → Portuguese → French → German → Japanese → Russian → Korean → Chinese (Simplified/Traditional). Picks the first available match.
-- **Timestamped segments** — Returns the full transcript plus individual segments with start/end times.
-- **Copy to clipboard** — One-click copy of the full transcript text.
-
-### Authentication
-- **Register** — Create an account with email + password. Auto-logs in on success.
-- **Login** — Sign in with email + password. Returns a JWT token.
-- **Logout** — Revokes the current JWT token (server-side blacklist).
-- **Session persistence** — Token stored in localStorage, survives page refreshes.
-- **Protected state** — Transcript page is only accessible when logged in.
-
-### Security
-- CORS pinned to specific frontend origins only
-- Input validation rejects non-http/https URLs
-- SSRF guard blocks private/internal IP addresses
-- Body size limits prevent abuse
-- Temporary files cleaned up on both success and failure
-- Passwords hashed with bcrypt (not stored in plaintext)
-- JWT tokens expire after 7 days
-- Logout invalidates tokens server-side
-
----
-
-## File-by-File Breakdown
+## Code Walkthrough
 
 ### Backend
 
@@ -324,7 +299,7 @@ Node dependencies: `react`, `react-dom` (runtime), `vite`, `@vitejs/plugin-react
 
 A simple JSON file that implements MongoDB-compatible CRUD operations. All user records and blacklisted tokens are stored here. The file is gitignored — each developer or deployment gets their own copy.
 
-**Database interface** (`backend/database.py`):
+**Database interface (`backend/database.py`):**
 ```python
 # All methods follow MongoDB conventions
 find_one(collection, query)           # Returns first matching doc or None
@@ -819,3 +794,9 @@ video-transcriber/
 ├── README.md                  # This file
 └── LICENSE                    # (optional)
 ```
+
+---
+
+## Author
+
+Created and maintained by `daxler_boi`.
