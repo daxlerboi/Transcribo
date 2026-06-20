@@ -13,7 +13,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "data.json")
 if MONGODB_URL:
     from pymongo import MongoClient
 
-    _client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000)
+    _client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000, tlsInsecure=True)
     _db = _client["transcribo"]
 
     async def find_one(collection: str, query: dict) -> dict | None:
