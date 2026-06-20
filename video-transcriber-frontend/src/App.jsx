@@ -166,7 +166,7 @@ function Sidebar({ open, onClose, history, activeId, onSelect, onDelete, onNewCh
 }
 
 function TranscribePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -177,11 +177,14 @@ function TranscribePage() {
   const [activeId, setActiveId] = useState(null);
 
   const loadHistory = useCallback(async () => {
+    if (!token) return;
     try {
-      const res = await fetch("/api/history");
+      const res = await fetch("/api/history", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) setHistory(await res.json());
     } catch {}
-  }, []);
+  }, [token]);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
@@ -194,7 +197,7 @@ function TranscribePage() {
     try {
       const res = await fetch("/api/transcribe", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ url: url.trim() }),
       });
       if (!res.ok) {
@@ -214,7 +217,9 @@ function TranscribePage() {
 
   const loadFromHistory = async (id) => {
     try {
-      const res = await fetch(`/api/history/${id}`);
+      const res = await fetch(`/api/history/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const item = await res.json();
         setUrl(item.url);
@@ -229,7 +234,10 @@ function TranscribePage() {
 
   const deleteFromHistory = async (id) => {
     try {
-      await fetch(`/api/history/${id}`, { method: "DELETE" });
+      await fetch(`/api/history/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (activeId === id) {
         setResult(null);
         setActiveId(null);
