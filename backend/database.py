@@ -9,9 +9,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 USE_MONGODB = os.getenv("MONGODB_URL", "")
+USE_SQLITE = os.getenv("USE_SQLITE", "0") == "1"
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
 
-if USE_MONGODB:
+if USE_MONGODB and not USE_SQLITE:
     from pymongo import MongoClient
 
     _client = MongoClient(USE_MONGODB, serverSelectionTimeoutMS=10000)
