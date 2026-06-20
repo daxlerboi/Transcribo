@@ -6,7 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
-from database import db
+from database import find_one, insert_one, update_one
 
 load_dotenv()
 
@@ -42,7 +42,7 @@ def create_token(email: str) -> str:
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -51,7 +51,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             raise HTTPException(401, "Invalid token")
     except JWTError:
         raise HTTPException(401, "Invalid or expired token")
-    user = db.find_one("users", {"email": email})
+    user = await find_one("users", {"email": email})
     if not user:
         raise HTTPException(401, "User not found")
     if user.get("tokens_blacklisted") and token in user.get("tokens_blacklisted", []):
@@ -59,16 +59,16 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     return user
 
 @router.post("/register", response_model=TokenResponse)
-def register(req: RegisterRequest):
+async def register(req: RegisterRequest):
     if not req.email or not req.password:
         raise HTTPException(400, "Email and password required")
     if len(req.password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
-    existing = db.find_one("users", {"email": req.email})
+    existing = await find_one("users", {"email": req.email})
     if existing:
         raise HTTPException(409, "Email already registered")
     hashed = pwd_context.hash(req.password)
-    user = db.insert_one("users", {
+    user = await insert_one("users", {
         "email": req.email,
         "password": hashed,
         "tokens_blacklisted": [],
@@ -77,21 +77,21 @@ def register(req: RegisterRequest):
     return TokenResponse(access_token=token, user=UserResponse(id=user["_id"], email=user["email"]))
 
 @router.post("/login", response_model=TokenResponse)
-def login(req: LoginRequest):
-    user = db.find_one("users", {"email": req.email})
+async def login(req: LoginRequest):
+    user = await find_one("users", {"email": req.email})
     if not user or not pwd_context.verify(req.password, user["password"]):
         raise HTTPException(401, "Invalid email or password")
     token = create_token(req.email)
     return TokenResponse(access_token=token, user=UserResponse(id=user["_id"], email=user["email"]))
 
 @router.post("/logout")
-def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    user = get_current_user(credentials)
+async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user = await get_current_user(credentials)
     blacklisted = user.get("tokens_blacklisted", [])
     blacklisted.append(credentials.credentials)
-    db.update_one("users", {"email": user["email"]}, {"tokens_blacklisted": blacklisted})
+    await update_one("users", {"email": user["email"]}, {"tokens_blacklisted": blacklisted})
     return {"message": "Logged out"}
 
 @router.get("/me", response_model=UserResponse)
-def me(user: dict = Depends(get_current_user)):
+async def me(user: dict = Depends(get_current_user)):
     return UserResponse(id=user["_id"], email=user["email"])

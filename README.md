@@ -4,7 +4,7 @@
 [![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-ready-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-47A248?logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Whisper](https://img.shields.io/badge/Whisper-OpenAI-412991)](https://github.com/openai/whisper)
 [![yt-dlp](https://img.shields.io/badge/yt--dlp-powered-FF0000?logo=youtube&logoColor=white)](https://github.com/yt-dlp/yt-dlp)
 [![JWT](https://img.shields.io/badge/JWT-auth-000000?logo=jsonwebtokens&logoColor=white)](https://jwt.io/)
@@ -39,7 +39,7 @@ The project follows a two-tier architecture:
 
 The frontend handles three states: loading (token validation), auth page (login/register), and transcribe page (the main interface). The backend handles URL validation, platform detection, language selection, and transcription orchestration.
 
-The database layer uses a JSON file in development (no server needed) and swaps to MongoDB in production via a single `.env` variable — no code changes required.
+The database layer auto-detects `MONGODB_URL` from the environment. If set, it uses **MongoDB via motor** (async). Otherwise it falls back to a local JSON file for development — zero config required.
 
 ---
 
@@ -64,8 +64,8 @@ The database layer uses a JSON file in development (no server needed) and swaps 
 
 ### Database
 
-- **JSON file** (development) — No database server needed
-- **MongoDB** (production) — Swappable via a single `.env` variable
+- **MongoDB** (production) — Async via `motor` driver. Set `MONGODB_URL` to activate.
+- **JSON file** (development) — Zero-config fallback when `MONGODB_URL` is not set.
 
 ---
 
@@ -152,21 +152,14 @@ The core transcription engine.
 - **`process_url(url)`** — Orchestrator: tries YouTube API first, falls back to download + Whisper
 
 #### `backend/database.py`
-Database abstraction layer.
+Database abstraction layer with automatic backend selection.
 
-- Implements a MongoDB-compatible interface using a local JSON file
-- Methods: `find_one()`, `insert_one()`, `update_one()`, `delete_one()`
-- Each method takes `collection` (string) and `query` (dict) parameters — same as MongoDB
-- Auto-assigns UUIDs to new documents
-- Auto-saves to disk after every write operation
-- Thread-safe for single-process use
-- When `MONGODB_URL` is set in `.env`, swap this file for `motor` (async MongoDB driver) without changing any other code
-
-```python
-db.find_one("users", {"email": "user@example.com"})
-db.insert_one("users", {"email": "...", "password": "..."})
-db.update_one("users", {"email": "..."}, {"tokens_blacklisted": [...]})
-```
+- If `MONGODB_URL` is set → uses **MongoDB via motor** (async driver)
+- If `MONGODB_URL` is not set → uses a local JSON file (no server needed)
+- Methods: `find_one()`, `insert_one()`, `update_one()`, `delete_one()` — same interface regardless of backend
+- All methods are async, called with `await` throughout the auth routes
+- JSON mode: auto-assigns UUIDs, saves to disk after every write
+- MongoDB mode: stores users in a `transcribo` database on your cluster
 
 #### `backend/requirements.txt`
 ```
@@ -295,13 +288,14 @@ Node dependencies: `react`, `react-dom` (runtime), `vite`, `@vitejs/plugin-react
 
 ### Database
 
-**Current (development):** `backend/data.json`
+Two backends, one interface. Set `MONGODB_URL` for MongoDB or leave it unset for local JSON.
 
-A simple JSON file that implements MongoDB-compatible CRUD operations. All user records and blacklisted tokens are stored here. The file is gitignored — each developer or deployment gets their own copy.
+**MongoDB mode (production):** Set `MONGODB_URL` in `backend/.env`. Uses `motor` (async driver). The `transcribo` database stores users in a `users` collection.
+
+**JSON mode (development):** `backend/data.json` (gitignored). No database server needed. Auto-created on first write. Good for up to ~10,000 users locally.
 
 **Database interface (`backend/database.py`):**
 ```python
-# All methods follow MongoDB conventions
 find_one(collection, query)           # Returns first matching doc or None
 insert_one(collection, doc)           # Returns doc with auto-assigned _id
 update_one(collection, query, update) # Returns True/False
@@ -319,7 +313,7 @@ delete_one(collection, query)         # Returns True/False
 }
 ```
 
-**To switch to MongoDB:** Set `MONGODB_URL` in `backend/.env`. The `database.py` module detects this and swaps from JSON file to `motor` (async MongoDB driver). No code changes needed.
+The interface is identical for both backends. Just set the env variable — no code changes needed.
 
 ---
 
@@ -361,12 +355,19 @@ cd ../video-transcriber-frontend
 npm install
 ```
 
-### 2. Copy the database template
+### 2. Set up the database
 
+**Option A — MongoDB (recommended for deployment):**
+Create `backend/.env`:
+```
+MONGODB_URL=mongodb+srv://username:password@your-cluster.mongodb.net/transcribo
+JWT_SECRET=your-64-char-random-secret
+```
+
+**Option B — JSON file (local dev, no server needed):**
 ```bash
 copy backend\data.sample.json backend\data.json
 ```
-
 Or on Linux/macOS:
 ```bash
 cp backend/data.sample.json backend/data.json
@@ -480,7 +481,22 @@ Platform detection (transcriber.py → detect_platform)
 
 ## Database Layer
 
-### Local Development (JSON File)
+The database backend is selected automatically at startup based on the `MONGODB_URL` environment variable. No code changes needed to switch between them — the `find_one`, `insert_one`, `update_one`, `delete_one` interface is identical for both.
+
+### MongoDB (production)
+
+Set `MONGODB_URL` in `backend/.env` and the app uses `motor` (async MongoDB driver).
+
+```env
+MONGODB_URL=mongodb+srv://username:password@your-cluster.mongodb.net/transcribo
+JWT_SECRET=your-64-char-random-secret
+```
+
+Users are stored in a `users` collection inside the `transcribo` database.
+
+**MongoDB Atlas** gives a free 512MB cluster — perfect for deployment.
+
+### JSON File (local dev)
 
 **File:** `backend/data.json` (gitignored)
 
@@ -492,21 +508,7 @@ No database server to install. No daemon to run. The file is created automatical
 
 All CRUD operations are atomic (write to disk on every change). Safe for single-process development.
 
-**Performance:** Good for up to ~10,000 users locally. Beyond that, switch to MongoDB.
-
-### Switching to MongoDB
-
-1. Create `backend/.env`:
-```
-MONGODB_URL=mongodb+srv://username:password@your-cluster.mongodb.net/transcribo
-JWT_SECRET=your-64-char-random-secret
-```
-
-2. The `database.py` module auto-detects the `MONGODB_URL` env variable and uses `motor` (async MongoDB driver) instead of the JSON file.
-
-3. No code changes needed. The `find_one`, `insert_one`, `update_one`, `delete_one` interface is identical.
-
-**MongoDB Atlas** gives a free 512MB cluster — perfect for production deployment.
+**Performance:** Good for up to ~10,000 users locally. Beyond that, use MongoDB.
 
 ---
 
@@ -627,12 +629,11 @@ Two-tier transcription pipeline with automatic fallback.
 - **Temp cleanup:** Isolated temp directories per download, cleaned up on both success and failure
 
 ### 4. Database Layer (`database.py`)
-MongoDB-compatible CRUD interface backed by a local JSON file.
+Auto-selects backend based on the `MONGODB_URL` environment variable.
 
-- **Methods:** `find_one()`, `insert_one()`, `update_one()`, `delete_one()` — same API as MongoDB
-- **Auto-save:** Writes to disk after every mutation
-- **Auto-ID:** Assigns UUIDs to new documents
-- **MongoDB swap:** Set `MONGODB_URL` in `.env` and the same code works with real MongoDB via `motor`
+- **MongoDB mode (production):** Uses `motor` async driver. Stores users in a `transcribo` database.
+- **JSON mode (development):** Local file-based storage. Auto-saves to disk after every mutation.
+- **Methods:** `find_one()`, `insert_one()`, `update_one()`, `delete_one()` — identical API for both backends
 - **Collections:** `users` — stores email, hashed password, token blacklist, timestamps
 
 ### 5. YouTube Integration (`youtube-transcript-api`)
@@ -768,8 +769,9 @@ video-transcriber/
 │   ├── main.py                # FastAPI server — CORS, routes, transcribe endpoint
 │   ├── auth.py                # Register, Login, Logout, /me — JWT auth
 │   ├── transcriber.py         # YouTube Transcript API + Whisper fallback, URL validation
-│   ├── database.py            # JSON file database (MongoDB-compatible interface)
+│   ├── database.py            # Database layer — MongoDB (motor) or JSON file
 │   ├── data.sample.json       # Database template (copy to data.json)
+│   ├── .env.example           # Environment variables template (copy to .env)
 │   ├── requirements.txt       # Python dependencies
 │   └── start_server.vbs       # VBS script for hidden background launch
 │
