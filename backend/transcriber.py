@@ -5,8 +5,23 @@ import subprocess
 import urllib.parse
 from ipaddress import ip_address, ip_network
 from fastapi import HTTPException
-import whisper
 from youtube_transcript_api import YouTubeTranscriptApi
+
+# Whisper is optional — disabled on low-memory environments (Render free tier, etc.)
+WHISPER_ENABLED = os.getenv("WHISPER_ENABLED", "1") == "1"
+_whisper_model = None
+
+def get_whisper_model():
+    global _whisper_model
+    if not WHISPER_ENABLED:
+        return None
+    if _whisper_model is None:
+        try:
+            import whisper
+            _whisper_model = whisper.load_model("base")
+        except Exception:
+            _whisper_model = False
+    return _whisper_model if _whisper_model is not False else None
 
 AUDIO_EXTS = {".m4a", ".mp3", ".wav", ".webm", ".ogg"}
 YT_API = YouTubeTranscriptApi()
@@ -117,7 +132,9 @@ def _cleanup_dir(d):
         pass
 
 def transcribe_audio(audio_path: str) -> dict:
-    model = whisper.load_model("base")
+    model = get_whisper_model()
+    if not model:
+        raise HTTPException(503, "Whisper speech-to-text is not available on this server. Only YouTube videos with captions are supported.")
     result = model.transcribe(audio_path)
     return {
         "text": result["text"].strip(),
