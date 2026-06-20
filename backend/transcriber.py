@@ -86,7 +86,10 @@ def get_youtube_transcript(video_id: str) -> dict | None:
         except Exception as e:
             last_error = e
             continue
-    raise HTTPException(502, f"Could not get captions: {last_error}")
+    msg = str(last_error)
+    if "blocked" in msg.lower() or "ip" in msg.lower():
+        raise HTTPException(502, "YouTube blocked this server's IP. Run the app locally with 'start.bat' to use your own IP.")
+    raise HTTPException(502, msg.split("\n")[0]) from None
 
 def download_audio(url: str) -> str:
     out_dir = tempfile.mkdtemp(prefix="transcribe_")
