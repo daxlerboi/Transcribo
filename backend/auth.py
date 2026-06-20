@@ -1,10 +1,9 @@
-import os
+import os, hashlib, base64
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from database import find_one, insert_one, update_one
 
@@ -15,8 +14,17 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE = timedelta(days=7)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
+
+def _hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 600000)
+    return base64.b64encode(salt + dk).decode()
+
+def _verify_password(password: str, stored: str) -> bool:
+    raw = base64.b64decode(stored)
+    salt, dk = raw[:16], raw[16:]
+    return hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 600000) == dk
 
 class RegisterRequest(BaseModel):
     email: str
@@ -67,7 +75,7 @@ async def register(req: RegisterRequest):
     existing = await find_one("users", {"email": req.email})
     if existing:
         raise HTTPException(409, "Email already registered")
-    hashed = pwd_context.hash(req.password)
+    hashed = _hash_password(req.password)
     user = await insert_one("users", {
         "email": req.email,
         "password": hashed,
@@ -79,7 +87,7 @@ async def register(req: RegisterRequest):
 @router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest):
     user = await find_one("users", {"email": req.email})
-    if not user or not pwd_context.verify(req.password, user["password"]):
+    if not user or not _verify_password(req.password, user["password"]):
         raise HTTPException(401, "Invalid email or password")
     token = create_token(req.email)
     return TokenResponse(access_token=token, user=UserResponse(id=user["_id"], email=user["email"]))
