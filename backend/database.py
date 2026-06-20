@@ -1,5 +1,6 @@
 import os
 import json
+import sqlite3
 import uuid
 import asyncio
 from datetime import datetime, timezone
@@ -7,13 +8,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MONGODB_URL = os.getenv("MONGODB_URL", "")
-DB_PATH = os.path.join(os.path.dirname(__file__), "data.json")
+USE_MONGODB = os.getenv("MONGODB_URL", "")
+DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
 
-if MONGODB_URL:
+if USE_MONGODB:
     from pymongo import MongoClient
 
-    _client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000)
+    _client = MongoClient(USE_MONGODB, serverSelectionTimeoutMS=10000)
     _db = _client["transcribo"]
 
     async def find_one(collection: str, query: dict) -> dict | None:
@@ -37,60 +38,91 @@ if MONGODB_URL:
         return result.deleted_count > 0
 
 else:
-    _data: dict = {"users": []}
+    def _get_conn():
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn
 
-    def _load():
-        if os.path.exists(DB_PATH):
-            try:
-                with open(DB_PATH, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, OSError):
-                return {"users": []}
-        return {"users": []}
+    def _init_db():
+        conn = _get_conn()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                _id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                tokens_blacklisted TEXT DEFAULT '[]',
+                created_at TEXT DEFAULT ''
+            )
+        """)
+        conn.commit()
+        conn.close()
 
-    def _save():
-        os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
-        with open(DB_PATH, "w", encoding="utf-8") as f:
-            json.dump(_data, f, indent=2, default=str)
+    _init_db()
 
-    _data = _load()
+    def _row_to_dict(row) -> dict:
+        d = dict(row)
+        d["_id"] = d.pop("id")
+        return d
 
     async def find_one(collection: str, query: dict) -> dict | None:
-        if collection not in _data:
+        if collection != "users":
             return None
-        for doc in _data[collection]:
-            if all(doc.get(k) == v for k, v in query.items()):
-                return dict(doc)
-        return None
+        await asyncio.to_thread(_init_db)
+        conn = _get_conn()
+        conditions = " AND ".join(f"{k} = ?" for k in query)
+        params = list(query.values())
+        cur = conn.execute(f"SELECT * FROM users WHERE {conditions}", params)
+        row = cur.fetchone()
+        conn.close()
+        return _row_to_dict(row) if row else None
 
     async def insert_one(collection: str, doc: dict) -> dict:
-        if collection not in _data:
-            _data[collection] = []
-        doc["_id"] = str(uuid.uuid4())
-        doc["created_at"] = datetime.now(timezone.utc).isoformat()
-        _data[collection].append(doc)
-        _save()
+        if collection != "users":
+            raise ValueError("Only users collection supported in SQLite mode")
+        await asyncio.to_thread(_init_db)
+        doc = dict(doc)
+        doc.setdefault("_id", str(uuid.uuid4()))
+        doc.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+        doc.setdefault("tokens_blacklisted", json.dumps([]))
+        if isinstance(doc.get("tokens_blacklisted"), list):
+            doc["tokens_blacklisted"] = json.dumps(doc["tokens_blacklisted"])
+        conn = _get_conn()
+        conn.execute(
+            "INSERT INTO users (_id, email, password, tokens_blacklisted, created_at) VALUES (?,?,?,?,?)",
+            (doc["_id"], doc["email"], doc["password"], doc["tokens_blacklisted"], doc["created_at"]),
+        )
+        conn.commit()
+        conn.close()
         return doc
 
     async def update_one(collection: str, query: dict, update: dict) -> bool:
-        if collection not in _data:
+        if collection != "users":
             return False
-        for doc in _data[collection]:
-            if all(doc.get(k) == v for k, v in query.items()):
-                doc.update(update)
-                _save()
-                return True
-        return False
+        await asyncio.to_thread(_init_db)
+        set_clause = ", ".join(f"{k} = ?" for k in update)
+        params = list(update.values())
+        where_keys = list(query.keys())
+        where_vals = list(query.values())
+        conditions = " AND ".join(f"{k} = ?" for k in query)
+        conn = _get_conn()
+        cur = conn.execute(
+            f"UPDATE users SET {set_clause} WHERE {conditions}",
+            params + where_vals,
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        conn.close()
+        return changed
 
     async def delete_one(collection: str, query: dict) -> bool:
-        if collection not in _data:
+        if collection != "users":
             return False
-        before = len(_data[collection])
-        _data[collection] = [
-            d for d in _data[collection]
-            if not all(d.get(k) == v for k, v in query.items())
-        ]
-        if len(_data[collection]) < before:
-            _save()
-            return True
-        return False
+        await asyncio.to_thread(_init_db)
+        conditions = " AND ".join(f"{k} = ?" for k in query)
+        params = list(query.values())
+        conn = _get_conn()
+        cur = conn.execute(f"DELETE FROM users WHERE {conditions}", params)
+        changed = cur.rowcount > 0
+        conn.commit()
+        conn.close()
+        return changed
