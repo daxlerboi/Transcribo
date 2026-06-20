@@ -2,6 +2,35 @@ import { useState } from "react";
 import { useAuth } from "./AuthContext.jsx";
 import "./App.css";
 
+function WaveIcon({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12v-2a3 3 0 0 1 3-3" opacity="0.4"/>
+      <path d="M7 12V8a2 2 0 0 1 4 0v8a2 2 0 0 0 4 0V6a3 3 0 0 1 3 3v3" opacity="0.4"/>
+      <path d="M17 12v4a2 2 0 0 0 4 0v-2"/>
+      <path d="M11 12V6a2 2 0 0 1 4 0v12a2 2 0 0 0 4 0"/>
+    </svg>
+  );
+}
+
+function YouTubeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 32 32 0 0 0 0 12a32 32 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1 32 32 0 0 0 .5-5.8 32 32 0 0 0-.5-5.8zM9.5 15.5V8.5l6.3 3.5-6.3 3.5z"/>
+    </svg>
+  );
+}
+
+function InstagramIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="5"/>
+      <circle cx="12" cy="12" r="5"/>
+      <circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/>
+    </svg>
+  );
+}
+
 function AuthPage({ mode, onSwitch, onSuccess }) {
   const { login, register } = useAuth();
   const [email, setEmail] = useState("");
@@ -27,8 +56,9 @@ function AuthPage({ mode, onSwitch, onSuccess }) {
   return (
     <div className="auth-page">
       <div className="auth-card">
+        <WaveIcon className="auth-logo" />
         <h1>Transcribo</h1>
-        <h2>{mode === "login" ? "Sign in" : "Create account"}</h2>
+        <h2>{mode === "login" ? "Sign in to your account" : "Create your account"}</h2>
         <form onSubmit={handleSubmit}>
           <input
             type="email"
@@ -118,7 +148,10 @@ function TranscribePage() {
     <div className="app">
       <header className="header">
         <div className="header-top">
-          <h1>Transcribo</h1>
+          <div className="header-brand">
+            <WaveIcon />
+            <h1>Transcribo</h1>
+          </div>
           <div className="header-user">
             <span className="user-email">{user?.email}</span>
             <button className="logout-btn" onClick={logout}>Log out</button>
@@ -160,7 +193,7 @@ function TranscribePage() {
         <div className="result">
           <div className="result-header">
             <span className={"platform-badge " + result.platform}>
-              {result.platform === "youtube" ? "YouTube" : "Instagram"}
+              {result.platform === "youtube" ? <><YouTubeIcon /> YouTube</> : <><InstagramIcon /> Instagram</>}
             </span>
             <button className="copy-btn" onClick={copyTranscript}>
               {copied ? "Copied!" : "Copy transcript"}
