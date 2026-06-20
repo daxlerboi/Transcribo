@@ -68,29 +68,39 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 @router.post("/register", response_model=TokenResponse)
 async def register(req: RegisterRequest):
-    if not req.email or not req.password:
-        raise HTTPException(400, "Email and password required")
-    if len(req.password) < 6:
-        raise HTTPException(400, "Password must be at least 6 characters")
-    existing = await find_one("users", {"email": req.email})
-    if existing:
-        raise HTTPException(409, "Email already registered")
-    hashed = _hash_password(req.password)
-    user = await insert_one("users", {
-        "email": req.email,
-        "password": hashed,
-        "tokens_blacklisted": [],
-    })
-    token = create_token(req.email)
-    return TokenResponse(access_token=token, user=UserResponse(id=user["_id"], email=user["email"]))
+    try:
+        if not req.email or not req.password:
+            raise HTTPException(400, "Email and password required")
+        if len(req.password) < 6:
+            raise HTTPException(400, "Password must be at least 6 characters")
+        existing = await find_one("users", {"email": req.email})
+        if existing:
+            raise HTTPException(409, "Email already registered")
+        hashed = _hash_password(req.password)
+        user = await insert_one("users", {
+            "email": req.email,
+            "password": hashed,
+            "tokens_blacklisted": [],
+        })
+        token = create_token(req.email)
+        return TokenResponse(access_token=token, user=UserResponse(id=user["_id"], email=user["email"]))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"{type(e).__name__}: {e}")
 
 @router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest):
-    user = await find_one("users", {"email": req.email})
-    if not user or not _verify_password(req.password, user["password"]):
-        raise HTTPException(401, "Invalid email or password")
-    token = create_token(req.email)
-    return TokenResponse(access_token=token, user=UserResponse(id=user["_id"], email=user["email"]))
+    try:
+        user = await find_one("users", {"email": req.email})
+        if not user or not _verify_password(req.password, user["password"]):
+            raise HTTPException(401, "Invalid email or password")
+        token = create_token(req.email)
+        return TokenResponse(access_token=token, user=UserResponse(id=user["_id"], email=user["email"]))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"{type(e).__name__}: {e}")
 
 @router.post("/logout")
 async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
