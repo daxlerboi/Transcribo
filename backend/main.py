@@ -22,10 +22,6 @@ app.add_middleware(
 
 app.include_router(auth_router)
 
-FRONTEND_DIR = Path(__file__).resolve().parent.parent / "video-transcriber-frontend" / "dist"
-if FRONTEND_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
-
 class TranscribeRequest(BaseModel):
     url: str
 
@@ -54,3 +50,7 @@ async def transcribe(req: TranscribeRequest):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "video-transcriber-frontend" / "dist"
+if FRONTEND_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
