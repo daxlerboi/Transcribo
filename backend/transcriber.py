@@ -70,27 +70,23 @@ def detect_platform(url: str) -> str:
 PREFERRED_LANGS = ["en", "hi", "es", "ar", "pt", "fr", "de", "ja", "ru", "ko", "zh-Hans", "zh-Hant"]
 
 def get_youtube_transcript(video_id: str) -> dict | None:
-    try:
-        transcript_list = YT_API.list(video_id)
-        available = {t.language_code for t in transcript_list}
-        chosen_lang = None
-        for lang in PREFERRED_LANGS:
-            if lang in available:
-                chosen_lang = lang
-                break
-        if not chosen_lang and available:
-            chosen_lang = sorted(available)[0]
-        if not chosen_lang:
-            return None
-        transcript = YT_API.fetch(video_id, [chosen_lang])
-        segments = [
-            {"start": round(s.start, 2), "end": round(s.start + s.duration, 2), "text": s.text.strip()}
-            for s in transcript
-        ]
-        text = " ".join(s["text"] for s in segments)
-        return {"text": text, "segments": segments, "language": chosen_lang}
-    except Exception as e:
-        raise HTTPException(502, f"Failed to fetch captions: {e}")
+    last_error = None
+    for lang in (None, *PREFERRED_LANGS):
+        try:
+            kwargs = {"languages": [lang]} if lang else {}
+            transcript = YT_API.get_transcript(video_id, **kwargs)
+            if not transcript:
+                continue
+            segments = [
+                {"start": round(s["start"], 2), "end": round(s["start"] + s["duration"], 2), "text": s["text"].strip()}
+                for s in transcript
+            ]
+            text = " ".join(s["text"] for s in segments)
+            return {"text": text, "segments": segments, "language": lang or "en"}
+        except Exception as e:
+            last_error = e
+            continue
+    raise HTTPException(502, f"Could not get captions: {last_error}")
 
 def download_audio(url: str) -> str:
     out_dir = tempfile.mkdtemp(prefix="transcribe_")
