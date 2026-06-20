@@ -1,5 +1,7 @@
 import os
 import re
+import json
+import urllib.request, urllib.error
 import tempfile
 import subprocess
 import urllib.parse
@@ -69,6 +71,25 @@ def detect_platform(url: str) -> str:
 
 PREFERRED_LANGS = ["en", "hi", "es", "ar", "pt", "fr", "de", "ja", "ru", "ko", "zh-Hans", "zh-Hant"]
 
+def _fetch_transcript_fallback(video_id: str) -> dict | None:
+    try:
+        url = f"https://youtubetranscript.com/api?vid={video_id}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+        if not data or not isinstance(data, list):
+            return None
+        segments = [
+            {"start": round(s["start"], 2), "end": round(s["start"] + s["duration"], 2), "text": s["text"].strip()}
+            for s in data if isinstance(s, dict)
+        ]
+        if not segments:
+            return None
+        text = " ".join(s["text"] for s in segments)
+        return {"text": text, "segments": segments, "language": "en"}
+    except Exception:
+        return None
+
 def get_youtube_transcript(video_id: str) -> dict | None:
     last_error = None
     for lang in (None, *PREFERRED_LANGS):
@@ -86,6 +107,9 @@ def get_youtube_transcript(video_id: str) -> dict | None:
         except Exception as e:
             last_error = e
             continue
+    fallback = _fetch_transcript_fallback(video_id)
+    if fallback:
+        return fallback
     msg = str(last_error)
     if "blocked" in msg.lower() or "ip" in msg.lower():
         raise HTTPException(502, "YouTube blocked this server's IP. Run the app locally with 'start.bat' to use your own IP.")
