@@ -102,7 +102,7 @@ def _extract_subs_ytdlp(video_id: str) -> dict | None:
         with open(cookies_path, "wb") as f:
             f.write(base64.b64decode(COOKIES_B64))
         out_template = os.path.join(out_dir, "%(id)s")
-        subprocess.run(
+        result = subprocess.run(
             [
                 "yt-dlp", f"https://www.youtube.com/watch?v={video_id}",
                 "--write-auto-subs", "--sub-lang", "en",
@@ -113,6 +113,8 @@ def _extract_subs_ytdlp(video_id: str) -> dict | None:
             ],
             capture_output=True, text=True, timeout=60,
         )
+        if result.returncode != 0:
+            return None
         segments = []
         for f in os.listdir(out_dir):
             if f.endswith(".vtt"):
@@ -162,11 +164,11 @@ def get_youtube_transcript(video_id: str) -> dict | None:
     cookie_subs = _extract_subs_ytdlp(video_id)
     if cookie_subs:
         return cookie_subs
+    if COOKIES_B64:
+        raise HTTPException(404, "No captions found for this video. Music videos often lack captions — try a different video (news, tutorials, talks).")
     msg = str(last_error)
     if "blocked" in msg.lower() or "ip" in msg.lower():
-        if not COOKIES_B64:
-            raise HTTPException(502, "YouTube blocked this server's IP. To bypass, export cookies from your browser and set YOUTUBE_COOKIES env var (base64-encoded cookies.txt). Or run locally with 'start.bat'.")
-        raise HTTPException(502, "Cookies provided but still blocked by YouTube. Your cookies may be expired — re-export them from your browser.")
+        raise HTTPException(502, "YouTube blocked this server's IP. To bypass, export cookies from your browser and set YOUTUBE_COOKIES env var (base64-encoded cookies.txt). Or run locally with 'start.bat'.")
     raise HTTPException(502, msg.split("\n")[0]) from None
 
 def download_audio(url: str) -> str:
