@@ -19,7 +19,7 @@ def get_whisper_model():
         try:
             import whisper
             _whisper_model = whisper.load_model("base")
-        except Exception:
+        except (ImportError, Exception):
             _whisper_model = False
     return _whisper_model if _whisper_model is not False else None
 
