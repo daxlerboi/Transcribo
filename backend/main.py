@@ -51,6 +51,25 @@ async def transcribe(req: TranscribeRequest):
 def health():
     return {"status": "ok"}
 
+@app.get("/api/debug")
+async def debug():
+    import traceback, sys
+    info = {"python": sys.version, "cwd": os.getcwd(), "files": os.listdir(".")}
+    try:
+        from database import find_one, _read
+        data = _read()
+        info["read_ok"] = True
+        info["users_count"] = len(data.get("users", []))
+    except Exception as e:
+        info["error"] = str(e)
+        info["traceback"] = traceback.format_exc()
+    try:
+        r = await find_one("users", {"email": "x@x.com"})
+        info["find_one_result"] = r
+    except Exception as e:
+        info["find_one_error"] = str(e)
+    return info
+
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "video-transcriber-frontend" / "dist"
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
