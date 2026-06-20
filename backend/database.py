@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import asyncio
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -10,29 +11,29 @@ MONGODB_URL = os.getenv("MONGODB_URL", "")
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.json")
 
 if MONGODB_URL:
-    from motor.motor_asyncio import AsyncIOMotorClient
+    from pymongo import MongoClient
 
-    _client = AsyncIOMotorClient(MONGODB_URL)
-    _db = _client.get_database("transcribo")
+    _client = MongoClient(MONGODB_URL, serverSelectionTimeoutMS=5000)
+    _db = _client["transcribo"]
 
     async def find_one(collection: str, query: dict) -> dict | None:
-        doc = await _db[collection].find_one(query)
+        doc = await asyncio.to_thread(_db[collection].find_one, query)
         if doc:
             doc["_id"] = str(doc["_id"])
         return doc
 
     async def insert_one(collection: str, doc: dict) -> dict:
         doc["created_at"] = datetime.now(timezone.utc).isoformat()
-        result = await _db[collection].insert_one(doc)
+        result = await asyncio.to_thread(_db[collection].insert_one, doc)
         doc["_id"] = str(result.inserted_id)
         return doc
 
     async def update_one(collection: str, query: dict, update: dict) -> bool:
-        result = await _db[collection].update_one(query, {"$set": update})
+        result = await asyncio.to_thread(_db[collection].update_one, query, {"$set": update})
         return result.modified_count > 0
 
     async def delete_one(collection: str, query: dict) -> bool:
-        result = await _db[collection].delete_one(query)
+        result = await asyncio.to_thread(_db[collection].delete_one, query)
         return result.deleted_count > 0
 
 else:
