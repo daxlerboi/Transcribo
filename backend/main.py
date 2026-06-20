@@ -1,16 +1,14 @@
+import os
 import asyncio
-from fastapi import FastAPI, HTTPException, Request
+from pathlib import Path
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from transcriber import process_url, validate_url
 from auth import router as auth_router
 
-ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:4173",
-]
+ORIGINS = os.getenv("ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173").split(",")
 
 app = FastAPI(title="Transcribo API")
 
@@ -23,6 +21,10 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "video-transcriber-frontend" / "dist"
+if FRONTEND_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 
 class TranscribeRequest(BaseModel):
     url: str

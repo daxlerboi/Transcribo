@@ -1,7 +1,7 @@
 @echo off
-echo Starting Transcribo backend...
-start "Transcribo Backend" cmd /c "cd /d D:\My_Web_Tools\video-transcriber\backend && uvicorn main:app --host 127.0.0.1 --port 8000 --timeout-keep-alive 600"
-echo Starting Transcribo frontend...
-start "Transcribo Frontend" cmd /c "cd /d D:\My_Web_Tools\video-transcriber\video-transcriber-frontend && npm run dev"
-echo.
-echo Open http://localhost:5173
+echo Building frontend...
+cd /d "%~dp0video-transcriber-frontend"
+call npm run build
+cd /d "%~dp0backend"
+echo Starting Transcribo on http://localhost:8000
+uvicorn main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 600

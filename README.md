@@ -373,16 +373,17 @@ Or on Linux/macOS:
 cp backend/data.sample.json backend/data.json
 ```
 
-### 3. Start both servers
+### 3. Start the app
 
-**Option A — Double-click `start.bat` (Windows only)**
+**Option A — Double-click `start.bat` (Windows only, production mode)**
+Builds the frontend and starts the backend on `http://localhost:8000`.
 
-**Option B — Two terminals:**
+**Option B — Development (two terminals with hot reload):**
 
 Terminal 1 (Backend):
 ```bash
 cd backend
-uvicorn main:app --host 127.0.0.1 --port 8000 --timeout-keep-alive 600
+uvicorn main:app --host 127.0.0.1 --port 8000 --timeout-keep-alive 600 --reload
 ```
 
 Terminal 2 (Frontend):
@@ -391,9 +392,18 @@ cd video-transcriber-frontend
 npm run dev
 ```
 
-### 4. Open the app
+Then open http://localhost:5173
 
-http://localhost:5173
+### 4. Production deploy (single service)
+
+```bash
+cd video-transcriber-frontend
+npm run build
+cd ../backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 600
+```
+
+The backend serves both the API and the built frontend. Visit http://localhost:8000.
 
 ---
 
@@ -731,32 +741,43 @@ Any URL pointing to a private/internal IP is rejected with HTTP 400. Prevents th
 
 ## Deployment
 
-### Option 1: Render (Free Tier)
-- **Frontend:** Build with `npm run build`, deploy the `dist/` folder as a static site
-- **Backend:** Deploy as a web service with `uvicorn main:app`
-- **Database:** Use Render's free PostgreSQL, or MongoDB Atlas free tier
-- **Limitation:** Free tier spins down after inactivity (cold start)
+The backend is designed to serve both the API and the built frontend as a single service.
 
-### Option 2: VPS ($6/mo Hetzner / DigitalOcean)
-- **All-in-one:** Run both servers on the same machine
-- **Frontend:** Build and serve via nginx
-- **Backend:** Run behind nginx reverse proxy with HTTPS
-- **Database:** Full Whisper fallback works (enough RAM)
+### Quick deploy (single service)
 
-### Option 3: Railway
-- **Frontend + Backend** as two services
-- **Database:** MongoDB Atlas or Railway's PostgreSQL plugin
-- **Good middle ground** — easier than VPS, more capable than Render free
+```bash
+# 1. Build the frontend
+cd video-transcriber-frontend
+npm run build
 
-### Environment Variables (Production)
+# 2. Set environment variables
+set MONGODB_URL=mongodb+srv://username:password@your-cluster.mongodb.net/transcribo
+set JWT_SECRET=your-64-char-random-secret
+set ORIGINS=https://your-domain.com
+
+# 3. Start the backend (serves API + frontend)
+cd ../backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 600
 ```
-MONGODB_URL=mongodb+srv://...
+
+On Windows, double-click `start.bat` to do all of this automatically.
+
+### Platform options
+
+| Platform | How | Database |
+|----------|-----|----------|
+| **Render** | Deploy backend as web service, set build command to build frontend first | MongoDB Atlas free tier |
+| **Railway** | Single service with `uvicorn main:app` | MongoDB Atlas |
+| **VPS** ($6/mo) | Build frontend, run backend behind nginx reverse proxy with HTTPS | MongoDB or local |
+| **Cloudflare Tunnel** | No open ports needed — tunnel to your VPS or local machine | Any |
+
+### Environment variables
+
+```
+MONGODB_URL=mongodb+srv://username:password@your-cluster.mongodb.net/transcribo
 JWT_SECRET=your-64-char-random-secret
-ORIGINS=https://your-frontend.com
+ORIGINS=https://your-domain.com,http://localhost:8000
 ```
-
-### HTTPS
-Add a reverse proxy (nginx / Caddy / Cloudflare Tunnel) in front of the backend for TLS termination.
 
 ---
 
