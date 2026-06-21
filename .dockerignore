@@ -1,0 +1,7 @@
+__pycache__
+*.pyc
+node_modules
+.git
+.env
+backend/data.json
+video-transcriber-frontend/node_modules
