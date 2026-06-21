@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./AuthContext.jsx";
 import "./App.css";
 
@@ -175,6 +175,8 @@ function TranscribePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [history, setHistory] = useState([]);
   const [activeId, setActiveId] = useState(null);
+  const [file, setFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   const loadHistory = useCallback(async () => {
     if (!token) return;
@@ -251,11 +253,46 @@ function TranscribePage() {
     setResult(null);
     setError("");
     setActiveId(null);
+    setFile(null);
     setSidebarOpen(false);
   };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") handleTranscribe();
+  };
+
+  const handleFileChange = (e) => {
+    const f = e.target.files?.[0];
+    if (f) setFile(f);
+  };
+
+  const handleFileTranscribe = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError("");
+    setResult(null);
+    setCopied(false);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/transcribe-file", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.detail || `Server error (${res.status})`);
+      }
+      const data = await res.json();
+      setResult(data);
+      setActiveId(null);
+      await loadHistory();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const copyTranscript = () => {
@@ -299,7 +336,7 @@ function TranscribePage() {
             </div>
           </div>
           <p className="subtitle">
-            Paste a YouTube or Instagram link — get the transcript
+            Paste a YouTube or Instagram link, or upload a file
           </p>
         </header>
 
@@ -322,6 +359,40 @@ function TranscribePage() {
           </button>
         </div>
 
+        <div className="file-area">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".mp3,.mp4,.m4a,.wav,.webm,.ogg,.mov,.avi,.mkv"
+            onChange={handleFileChange}
+            className="file-input-hidden"
+          />
+          <div className="file-dropzone" onClick={() => fileInputRef.current?.click()}>
+            {file ? (
+              <div className="file-selected">
+                <span className="file-name">{file.name}</span>
+                <span className="file-size">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
+                <button className="file-clear" onClick={(e) => { e.stopPropagation(); setFile(null); }}>
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <span className="file-placeholder">
+                Click to select an audio/video file
+              </span>
+            )}
+          </div>
+          {file && (
+            <button
+              className="transcribe-btn"
+              onClick={handleFileTranscribe}
+              disabled={loading}
+            >
+              {loading ? <span className="spinner" /> : "Transcribe file"}
+            </button>
+          )}
+        </div>
+
         {error && <div className="error">{error}</div>}
 
         {loading && (
@@ -334,7 +405,7 @@ function TranscribePage() {
           <div className="result">
             <div className="result-header">
               <span className={"platform-badge " + result.platform}>
-                {result.platform === "youtube" ? <><YouTubeIcon /> YouTube</> : <><InstagramIcon /> Instagram</>}
+                {result.platform === "youtube" ? <><YouTubeIcon /> YouTube</> : result.platform === "instagram" ? <><InstagramIcon /> Instagram</> : <><WaveIcon /> Local file</>}
               </span>
               <button className="copy-btn" onClick={copyTranscript}>
                 {copied ? "Copied!" : "Copy transcript"}

@@ -1,13 +1,18 @@
 import os
 import asyncio
+import tempfile
+import shutil
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from transcriber import process_url, validate_url
+from transcriber import process_url, validate_url, transcribe_audio
 from auth import router as auth_router, get_current_user
+
+AUDIO_EXTS = {".m4a", ".mp3", ".wav", ".webm", ".ogg", ".mp4", ".mov", ".avi", ".mkv"}
+MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB
 
 ORIGINS = os.getenv("ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173").split(",")
 
@@ -110,6 +115,47 @@ async def get_history(item_id: str, user: dict = Depends(get_current_user)):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+@app.post("/api/transcribe-file")
+async def transcribe_file(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    ext = Path(file.filename).suffix.lower() if file.filename else ""
+    if ext not in AUDIO_EXTS:
+        raise HTTPException(400, f"Unsupported file type '{ext}'. Supported: {', '.join(sorted(AUDIO_EXTS))}")
+    tmpdir = tempfile.mkdtemp(prefix="upload_")
+    try:
+        out_path = os.path.join(tmpdir, f"audio{ext}")
+        with open(out_path, "wb") as f:
+            while True:
+                chunk = await file.read(8 * 1024 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+                if os.path.getsize(out_path) > MAX_FILE_SIZE:
+                    raise HTTPException(413, "File too large — max 1GB")
+        result = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(None, transcribe_audio, out_path),
+            timeout=600,
+        )
+        title = result.get("segments", [{}])[0].get("text", file.filename or "untitled")[:80]
+        await insert_one("transcriptions", {
+            "user_email": user["email"],
+            "title": title,
+            "url": f"file:{file.filename}",
+            "platform": "local",
+            "text": result["text"],
+            "segments": result["segments"],
+        })
+        result["platform"] = "local"
+        result["url"] = f"file:{file.filename}"
+        return result
+    except asyncio.TimeoutError:
+        raise HTTPException(408, "Transcription timed out")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e)[:500])
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "video-transcriber-frontend" / "dist"
 if FRONTEND_DIR.exists():
