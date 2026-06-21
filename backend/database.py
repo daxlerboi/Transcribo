@@ -7,7 +7,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATA_FILE = os.path.join(os.path.dirname(__file__), "data.json")
+DATA_DIR = os.getenv("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+DATA_FILE = os.path.join(DATA_DIR, "data.json")
+
+def _ensure_dir():
+    os.makedirs(DATA_DIR, exist_ok=True)
 
 def _read():
     if not os.path.exists(DATA_FILE):
@@ -16,6 +20,7 @@ def _read():
         return json.load(f)
 
 def _write(data):
+    _ensure_dir()
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, default=str)
 

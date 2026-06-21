@@ -27,7 +27,6 @@ def get_whisper_model():
     return _whisper_model if _whisper_model is not False else None
 
 AUDIO_EXTS = {".m4a", ".mp3", ".wav", ".webm", ".ogg"}
-YT_API = YouTubeTranscriptApi()
 
 COOKIES_B64 = os.getenv("YOUTUBE_COOKIES", "")
 
@@ -170,31 +169,29 @@ def get_youtube_transcript(video_id: str) -> dict | None:
     result = _fetch_transcript_with_cookies(video_id)
     if result is not None:
         return result
+    last_error = None
     for lang in (None, *PREFERRED_LANGS):
         try:
-            kwargs = {"languages": [lang]} if lang else {}
-            transcript = YT_API.get_transcript(video_id, **kwargs)
+            langs = [lang] if lang else ["en"]
+            transcript = YouTubeTranscriptApi().fetch(video_id, languages=langs)
             if not transcript:
                 continue
             segments = [
-                {"start": round(s["start"], 2), "end": round(s["start"] + s["duration"], 2), "text": s["text"].strip()}
+                {"start": round(s.start, 2), "end": round(s.start + s.duration, 2), "text": s.text.strip()}
                 for s in transcript
             ]
             text = " ".join(s["text"] for s in segments)
             return {"text": text, "segments": segments, "language": lang or "en"}
-        except Exception:
+        except Exception as e:
+            last_error = e
             continue
     fallback = _fetch_transcript_fallback(video_id)
     if fallback:
         return fallback
     if COOKIES_B64:
         raise HTTPException(404, "No captions found for this video — music videos and shorts often lack captions. Try a video with dialogue (talks, tutorials, news).")
-    raise HTTPException(502, (
-        "YouTube blocked this server's IP. To fix this, "
-        "export your YouTube cookies as JSON from your browser, "
-        "base64-encode them, and set as YOUTUBE_COOKIES env var. "
-        "Or run locally with 'start.bat'."
-    ))
+    msg = str(last_error or "")
+    raise HTTPException(502, msg.split("\n")[0] or "Failed to fetch transcript")
 
 def download_audio(url: str) -> str:
     out_dir = tempfile.mkdtemp(prefix="transcribe_")
