@@ -1,0 +1,23 @@
+{
+  "name": "transcribo",
+  "version": "1.0.0",
+  "description": "Transcribo — Video Transcriber Desktop App",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev:electron": "electron .",
+    "dev:frontend": "cd video-transcriber-frontend && npm run dev",
+    "dev:backend": "cd backend && uvicorn main:app --host 127.0.0.1 --port 8000 --reload",
+    "dev": "concurrently --kill-others \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on http://localhost:5173 && npm run dev:electron\"",
+    "build:frontend": "cd video-transcriber-frontend && npm run build",
+    "build": "npm run build:frontend && electron-builder",
+    "pack": "npm run build:frontend && electron-builder --dir",
+    "postinstall": "npm install --prefix video-transcriber-frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "electron": "^42.4.1",
+    "electron-builder": "^25.1.0",
+    "wait-on": "^8.0.1"
+  }
+}

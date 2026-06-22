@@ -157,6 +157,6 @@ async def transcribe_file(file: UploadFile = File(...), user: dict = Depends(get
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
-FRONTEND_DIR = Path(__file__).resolve().parent.parent / "video-transcriber-frontend" / "dist"
+FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", str(Path(__file__).resolve().parent.parent / "video-transcriber-frontend" / "dist")))
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

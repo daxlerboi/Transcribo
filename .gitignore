@@ -19,6 +19,9 @@ backend/.env
 # Local database (contains user data)
 backend/data.json
 
+# Electron
+release/
+
 # OS
 .DS_Store
 Thumbs.db
