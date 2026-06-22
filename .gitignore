@@ -21,6 +21,7 @@ backend/data.json
 
 # Electron
 release/
+dist-electron/
 
 # OS
 .DS_Store

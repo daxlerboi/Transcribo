@@ -2,8 +2,9 @@ appId: com.transcribo.app
 productName: Transcribo
 copyright: "Copyright © 2024 Transcribo"
 directories:
-  output: release
+  output: dist-electron
   buildResources: build
+  app: .
 icon: build/icon.png
 files:
   - "electron/**/*"

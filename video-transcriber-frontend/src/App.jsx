@@ -60,6 +60,47 @@ function TrashIcon() {
   );
 }
 
+function ClipboardIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor">
+      <path d="M5 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0 3a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm-1 2a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm0 3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5z"/>
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor">
+      <path d="M8 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1A.5.5 0 0 1 8 1zm0 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm5.657-6.657a.5.5 0 0 1 0 .707l-.707.707a.5.5 0 1 1-.707-.707l.707-.707a.5.5 0 0 1 .707 0zM13.5 8a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1a.5.5 0 0 1-.5-.5zm-2.157 4.157a.5.5 0 0 1 0 .707l-.707.707a.5.5 0 1 1-.707-.707l.707-.707a.5.5 0 0 1 .707 0zM8 13.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1a.5.5 0 0 1 .5-.5zm-4.486-1.343a.5.5 0 0 1 0-.707l.707-.707a.5.5 0 1 1 .707.707l-.707.707a.5.5 0 0 1-.707 0zM1 8a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 0 1h-1A.5.5 0 0 1 1 8zm2.757-6.071a.5.5 0 0 1 0 .707L3.05 3.343a.5.5 0 1 1-.707-.707l.707-.707a.5.5 0 0 1 .707 0z"/>
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor">
+      <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.37 8.37 0 0 1 8 16c-4.418 0-8-3.582-8-8a8.109 8.109 0 0 1 5.795-7.722.768.768 0 0 1 .205 0z"/>
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor">
+      <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+      <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" style={{width:12,height:12,opacity:0.5}}>
+      <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+    </svg>
+  );
+}
+
 function AuthPage({ mode, onSwitch, onSuccess }) {
   const { login, register } = useAuth();
   const [email, setEmail] = useState("");
@@ -124,6 +165,11 @@ function AuthPage({ mode, onSwitch, onSuccess }) {
 }
 
 function Sidebar({ open, onClose, history, activeId, onSelect, onDelete, onNewChat }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const filtered = searchQuery.trim()
+    ? history.filter((h) => h.title?.toLowerCase().includes(searchQuery.toLowerCase()))
+    : history;
+
   return open && (
     <>
       <div className="sidebar-overlay" onClick={onClose} />
@@ -133,12 +179,23 @@ function Sidebar({ open, onClose, history, activeId, onSelect, onDelete, onNewCh
             <PlusIcon /> New transcription
           </button>
         </div>
+        {history.length > 0 && (
+          <div className="sidebar-search">
+            <input
+              className="sidebar-search-input"
+              placeholder="Search history..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+            />
+          </div>
+        )}
         <div className="sidebar-list">
-          {history.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="sidebar-empty">
-              No transcriptions yet.<br />Paste a URL and transcribe.
+              {searchQuery ? "No matches found." : "No transcriptions yet.\nPaste a URL and transcribe."}
             </div>
-          ) : history.map((item) => (
+          ) : filtered.map((item) => (
             <div
               key={item.id}
               className={"history-item" + (item.id === activeId ? " active" : "")}
@@ -176,7 +233,26 @@ function TranscribePage() {
   const [history, setHistory] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [file, setFile] = useState(null);
+  const [dark, setDark] = useState(() => localStorage.getItem("transcribo-theme") === "dark");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [segmentCopied, setSegmentCopied] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
+  const exportRef = useRef(null);
+  const urlRef = useRef(null);
+
+  useEffect(() => {
+    document.body.parentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    localStorage.setItem("transcribo-theme", dark ? "dark" : "light");
+  }, [dark]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const loadHistory = useCallback(async () => {
     if (!token) return;
@@ -189,6 +265,12 @@ function TranscribePage() {
   }, [token]);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  const notify = (title, body) => {
+    if (window.electronAPI?.isElectron) {
+      try { window.electronAPI.notify(title, body); } catch {}
+    }
+  };
 
   const handleTranscribe = async () => {
     if (!url.trim()) return;
@@ -210,6 +292,7 @@ function TranscribePage() {
       setResult(data);
       setActiveId(null);
       await loadHistory();
+      notify("Transcription complete", data.platform === "local" ? "File transcribed successfully" : `URL transcribed: ${data.text?.slice(0, 60)}...`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -258,8 +341,22 @@ function TranscribePage() {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") handleTranscribe();
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      handleTranscribe();
+    } else if (e.key === "Enter" && url.trim()) {
+      handleTranscribe();
+    }
   };
+
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        if (url.trim() && !loading) handleTranscribe();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [url, loading, token]);
 
   const handleFileChange = (e) => {
     const f = e.target.files?.[0];
@@ -288,11 +385,32 @@ function TranscribePage() {
       setResult(data);
       setActiveId(null);
       await loadHistory();
+      notify("Transcription complete", `File "${file.name}" transcribed successfully`);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) setFile(f);
   };
 
   const copyTranscript = () => {
@@ -302,10 +420,58 @@ function TranscribePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const copySegment = (text) => {
+    navigator.clipboard.writeText(text);
+    setSegmentCopied(text);
+    setTimeout(() => setSegmentCopied(null), 1500);
+  };
+
   const formatTime = (s) => {
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  const formatTimeSrt = (s) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}:${sec.toFixed(3).padStart(6,"0")}`;
+  };
+
+  const download = (content, filename, mime) => {
+    const blob = new Blob([content], { type: mime });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  };
+
+  const exportTxt = () => {
+    if (!result) return;
+    download(result.text, `transcribo-${result.platform}-${Date.now()}.txt`, "text/plain");
+    setExportOpen(false);
+  };
+
+  const exportSrt = () => {
+    if (!result?.segments?.length) return;
+    const srt = result.segments.map((seg, i) =>
+      `${i + 1}\n${formatTimeSrt(seg.start)} --> ${formatTimeSrt(seg.end || seg.start + 2)}\n${seg.text}\n`
+    ).join("\n");
+    download(srt, `transcribo-${result.platform}-${Date.now()}.srt`, "text/plain");
+    setExportOpen(false);
+  };
+
+  const exportVtt = () => {
+    if (!result?.segments?.length) return;
+    const vtt = "WEBVTT\n\n" + result.segments.map((seg, i) =>
+      `${formatTimeSrt(seg.start)} --> ${formatTimeSrt(seg.end || seg.start + 2)}\n${seg.text}`
+    ).join("\n\n");
+    download(vtt, `transcribo-${result.platform}-${Date.now()}.vtt`, "text/vtt");
+    setExportOpen(false);
   };
 
   return (
@@ -330,9 +496,14 @@ function TranscribePage() {
               <WaveIcon />
               <h1>Transcribo</h1>
             </div>
-            <div className="header-user">
-              <span className="user-email">{user?.email}</span>
-              <button className="logout-btn" onClick={logout}>Log out</button>
+            <div className="header-actions">
+              <button className="theme-toggle" onClick={() => setDark((d) => !d)} title={dark ? "Light mode" : "Dark mode"}>
+                {dark ? <SunIcon /> : <MoonIcon />}
+              </button>
+              <div className="header-user">
+                <span className="user-email">{user?.email}</span>
+                <button className="logout-btn" onClick={logout}>Log out</button>
+              </div>
             </div>
           </div>
           <p className="subtitle">
@@ -342,6 +513,7 @@ function TranscribePage() {
 
         <div className="input-area">
           <input
+            ref={urlRef}
             type="url"
             className="url-input"
             placeholder="https://youtube.com/watch?v=... or https://instagram.com/reel/..."
@@ -359,7 +531,12 @@ function TranscribePage() {
           </button>
         </div>
 
-        <div className="file-area">
+        <div
+          className="file-area"
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <input
             ref={fileInputRef}
             type="file"
@@ -367,7 +544,10 @@ function TranscribePage() {
             onChange={handleFileChange}
             className="file-input-hidden"
           />
-          <div className="file-dropzone" onClick={() => fileInputRef.current?.click()}>
+          <div
+            className={"file-dropzone" + (dragOver ? " drag-over" : "")}
+            onClick={() => fileInputRef.current?.click()}
+          >
             {file ? (
               <div className="file-selected">
                 <span className="file-name">{file.name}</span>
@@ -378,7 +558,7 @@ function TranscribePage() {
               </div>
             ) : (
               <span className="file-placeholder">
-                Click to select an audio/video file
+                Click to select or drag & drop an audio/video file
               </span>
             )}
           </div>
@@ -407,9 +587,23 @@ function TranscribePage() {
               <span className={"platform-badge " + result.platform}>
                 {result.platform === "youtube" ? <><YouTubeIcon /> YouTube</> : result.platform === "instagram" ? <><InstagramIcon /> Instagram</> : <><WaveIcon /> Local file</>}
               </span>
-              <button className="copy-btn" onClick={copyTranscript}>
-                {copied ? "Copied!" : "Copy transcript"}
-              </button>
+              <div className="result-actions">
+                <div className="export-wrapper" ref={exportRef}>
+                  <button className="icon-btn" onClick={() => setExportOpen((o) => !o)} title="Export transcript">
+                    <DownloadIcon /> Export
+                  </button>
+                  {exportOpen && (
+                    <div className="export-menu">
+                      <button onClick={exportTxt}>.txt (Plain text)</button>
+                      <button onClick={exportSrt}>.srt (Subtitles)</button>
+                      <button onClick={exportVtt}>.vtt (Web subtitles)</button>
+                    </div>
+                  )}
+                </div>
+                <button className="icon-btn" onClick={copyTranscript}>
+                  {copied ? "Copied!" : "Copy"}
+                </button>
+              </div>
             </div>
 
             <div className="transcript-full">
@@ -423,8 +617,11 @@ function TranscribePage() {
                 <div className="segment-list">
                   {result.segments.map((seg, i) => (
                     <div className="segment" key={i}>
-                      <span className="segment-time">{formatTime(seg.start)}</span>
+                      <span className="segment-time" title="Click to copy timestamp">{formatTime(seg.start)}</span>
                       <span className="segment-text">{seg.text}</span>
+                      <button className="segment-copy" onClick={() => copySegment(seg.text)} title="Copy segment">
+                        {segmentCopied === seg.text ? <span style={{fontSize:10}}>OK</span> : <ClipboardIcon />}
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -432,6 +629,10 @@ function TranscribePage() {
             )}
           </div>
         )}
+
+        <p className="kbd-hint" style={{textAlign:"center",marginTop:24}}>
+          Tip: Press <kbd>Enter</kbd> to transcribe, <kbd>Ctrl</kbd>+<kbd>Enter</kbd> from anywhere
+        </p>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog } = require('electron');
+const { app, BrowserWindow, Menu, dialog, Tray, Notification, nativeImage } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -8,6 +8,7 @@ const BACKEND_PORT = 8000;
 
 let mainWindow = null;
 let backendProcess = null;
+let tray = null;
 
 function getBackendDir() {
   if (isDev) return path.join(__dirname, '..', 'backend');
@@ -17,6 +18,11 @@ function getBackendDir() {
 function getFrontendDir() {
   if (isDev) return path.join(__dirname, '..', 'video-transcriber-frontend', 'dist');
   return path.join(process.resourcesPath, 'frontend');
+}
+
+function getIconPath() {
+  if (isDev) return path.join(__dirname, '..', 'build', 'icon.png');
+  return path.join(process.resourcesPath, 'icon.png');
 }
 
 function waitForBackend(maxRetries = 30, interval = 1000) {
@@ -89,6 +95,31 @@ function startBackend() {
   });
 }
 
+function createTray() {
+  try {
+    const iconPath = getIconPath();
+    const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+    tray = new Tray(icon);
+    tray.setToolTip('Transcribo');
+    tray.setContextMenu(Menu.buildFromTemplate([
+      {
+        label: 'Show Transcribo',
+        click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } },
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        click: () => { app.quit(); },
+      },
+    ]));
+    tray.on('double-click', () => {
+      if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
+    });
+  } catch (e) {
+    console.log('Tray not available:', e.message);
+  }
+}
+
 function createMenu() {
   const template = [
     {
@@ -96,7 +127,35 @@ function createMenu() {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
-        { role: 'quit' },
+        {
+          label: 'New Transcription',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => {
+            if (mainWindow) mainWindow.webContents.executeJavaScript('document.querySelector(".new-chat-btn")?.click()');
+          },
+        },
+        { type: 'separator' },
+        { role: 'quit', accelerator: 'CmdOrCtrl+Q' },
+      ],
+    },
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Open File...',
+          accelerator: 'CmdOrCtrl+O',
+          click: async () => {
+            const result = await dialog.showOpenDialog(mainWindow, {
+              properties: ['openFile'],
+              filters: [{ name: 'Audio/Video', extensions: ['mp3','mp4','m4a','wav','webm','ogg','mov','avi','mkv'] }],
+            });
+            if (!result.canceled && result.filePaths[0]) {
+              mainWindow.webContents.executeJavaScript(`window.__electronOpenFile && window.__electronOpenFile(${JSON.stringify(result.filePaths[0])})`);
+            }
+          },
+        },
+        { type: 'separator' },
+        { role: 'close' },
       ],
     },
     {
@@ -146,6 +205,7 @@ async function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: 'Transcribo',
+    icon: getIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -161,6 +221,13 @@ async function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     require('electron').shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  mainWindow.on('minimize', (e) => {
+    if (tray) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
   });
 
   const url = isDev
@@ -188,6 +255,7 @@ app.whenReady().then(async () => {
   }
 
   await createWindow();
+  createTray();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
